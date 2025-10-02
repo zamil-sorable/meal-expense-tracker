@@ -213,9 +213,9 @@ app.get('/api/export', async (req, res) => {
     // Add headers
     worksheet.columns = [
       { header: 'Date', key: 'date', width: 15 },
-      { header: 'Day', key: 'day', width: 12 },
+      { header: 'Day', key: 'day', width: 18 },
       { header: 'Amount (RM)', key: 'amount', width: 15, style: { numFmt: '0.00' } },
-      { header: 'Place', key: 'place', width: 30 },
+      { header: 'Place', key: 'place', width: 40 },
       { header: 'Receipt File', key: 'receipt', width: 35 }
     ];
 
@@ -238,8 +238,46 @@ app.get('/api/export', async (req, res) => {
       };
     });
 
-    // Add data
+    // Add data with daily subtotals
+    let currentDate = null;
+    let dailyTotal = 0;
+    let currentDay = null;
+
     expenses.forEach((expense, index) => {
+      // Add daily subtotal row when date changes
+      if (currentDate && currentDate !== expense.date) {
+        const subtotalRow = worksheet.addRow({
+          date: currentDate,
+          day: 'Daily Total',
+          amount: dailyTotal,
+          place: '',
+          receipt: ''
+        });
+
+        subtotalRow.font = { bold: true };
+
+        // Red background if exceeds RM50, otherwise light blue
+        const bgColor = dailyTotal > 50 ? 'FFFF6B6B' : 'FFE3F2FD';
+        subtotalRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: bgColor }
+        };
+
+        subtotalRow.eachCell({ includeEmpty: true }, (cell) => {
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+            left: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+            bottom: { style: 'medium', color: { argb: 'FF000000' } },
+            right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
+          };
+        });
+
+        // Reset for new day
+        dailyTotal = 0;
+      }
+
+      // Add expense row
       const row = worksheet.addRow({
         date: expense.date,
         day: expense.day,
@@ -247,15 +285,6 @@ app.get('/api/export', async (req, res) => {
         place: expense.place || 'N/A',
         receipt: expense.receiptPath ? path.basename(expense.receiptPath).replace(/_\d+(\.\w+)$/, '$1') : 'N/A'
       });
-
-      // Add alternating row colors
-      if (index % 2 === 0) {
-        row.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFF5F5F5' }
-        };
-      }
 
       // Add borders to all cells
       row.eachCell({ includeEmpty: true }, (cell) => {
@@ -266,7 +295,41 @@ app.get('/api/export', async (req, res) => {
           right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
         };
       });
+
+      // Track current date and accumulate daily total
+      currentDate = expense.date;
+      currentDay = expense.day;
+      dailyTotal += parseFloat(expense.amount);
     });
+
+    // Add final daily subtotal for the last date group
+    if (currentDate) {
+      const subtotalRow = worksheet.addRow({
+        date: currentDate,
+        day: 'Daily Total',
+        amount: dailyTotal,
+        place: '',
+        receipt: ''
+      });
+
+      subtotalRow.font = { bold: true };
+
+      const bgColor = dailyTotal > 50 ? 'FFFF6B6B' : 'FFE3F2FD';
+      subtotalRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: bgColor }
+      };
+
+      subtotalRow.eachCell({ includeEmpty: true }, (cell) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+          left: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+          bottom: { style: 'medium', color: { argb: 'FF000000' } },
+          right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
+        };
+      });
+    }
 
     // Add total row
     const totalRow = worksheet.addRow({
