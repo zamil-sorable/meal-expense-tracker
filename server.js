@@ -299,7 +299,7 @@ app.get('/api/export', async (req, res) => {
       // Track current date and accumulate daily total
       currentDate = expense.date;
       currentDay = expense.day;
-      dailyTotal += parseFloat(expense.amount);
+      dailyTotal = roundToTwo(dailyTotal + parseFloat(expense.amount));
     });
 
     // Add final daily subtotal for the last date group
@@ -335,7 +335,7 @@ app.get('/api/export', async (req, res) => {
     const totalRow = worksheet.addRow({
       date: 'TOTAL',
       day: '',
-      amount: expenses.reduce((sum, e) => sum + e.amount, 0),
+      amount: roundToTwo(expenses.reduce((sum, e) => sum + e.amount, 0)),
       place: '',
       receipt: ''
     });
