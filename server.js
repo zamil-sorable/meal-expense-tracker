@@ -119,25 +119,15 @@ app.post('/api/expenses', upload.single('receipt'), async (req, res) => {
     if (amountNum <= 0) {
       return res.status(400).json({ error: 'Invalid amount: must be greater than 0' });
     }
-    if (amountNum > 50) {
-      return res.status(400).json({ error: 'Invalid amount: exceeds RM50 per expense' });
-    }
+    // Cap individual expense at RM50 max per transaction
+    const cappedAmount = amountNum > 50 ? 50 : amountNum;
     // Round to 2 decimal places to prevent precision issues
-    const validAmount = Math.round(amountNum * 100) / 100;
+    const validAmount = Math.round(cappedAmount * 100) / 100;
 
     const receiptPath = req.file ? req.file.path.replace(__dirname + '/', '') : null;
 
     const data = await fs.readFile(dataFile, 'utf8');
     const expenses = JSON.parse(data);
-
-    // Check daily total doesn't exceed RM50
-    const todayExpenses = expenses.expenses.filter(e => e.date === date);
-    const todayTotal = roundToTwo(todayExpenses.reduce((sum, e) => sum + e.amount, 0));
-    if (roundToTwo(todayTotal + validAmount) > 50) {
-      return res.status(400).json({
-        error: `Daily limit exceeded: you have already claimed RM${todayTotal.toFixed(2)} today. Adding RM${validAmount.toFixed(2)} would exceed the RM50.00 daily limit.`
-      });
-    }
 
     const newExpense = {
       id: Date.now().toString(),
@@ -212,9 +202,10 @@ app.get('/api/export', async (req, res) => {
 
     // Add headers
     worksheet.columns = [
-      { header: 'Date', key: 'date', width: 15 },
+      { header: 'Date', key: 'date', width: 15, style: { numFmt: 'yyyy-mm-dd' } },
       { header: 'Day', key: 'day', width: 18 },
       { header: 'Amount (RM)', key: 'amount', width: 15, style: { numFmt: '0.00' } },
+      { header: 'Capped Amount (RM)', key: 'claimable', width: 15, style: { numFmt: '0.00' } },
       { header: 'Place', key: 'place', width: 40 },
       { header: 'Receipt File', key: 'receipt', width: 35 }
     ];
@@ -242,27 +233,38 @@ app.get('/api/export', async (req, res) => {
     let currentDate = null;
     let dailyTotal = 0;
     let currentDay = null;
+    let totalClaimable = 0; // Track total claimable amount across all days
 
     expenses.forEach((expense, index) => {
       // Add daily subtotal row when date changes
       if (currentDate && currentDate !== expense.date) {
+        // Cap daily total at RM50 for claimable amount
+        const claimableDaily = Math.min(dailyTotal, 50);
+        totalClaimable = roundToTwo(totalClaimable + claimableDaily);
+
         const subtotalRow = worksheet.addRow({
           date: currentDate,
           day: 'Daily Total',
           amount: dailyTotal,
+          claimable: claimableDaily,
           place: '',
           receipt: ''
         });
 
         subtotalRow.font = { bold: true };
 
-        // Red background if exceeds RM50, otherwise light blue
-        const bgColor = dailyTotal > 50 ? 'FFFF6B6B' : 'FFE3F2FD';
+        // Always use blue background for Daily Total
         subtotalRow.fill = {
           type: 'pattern',
           pattern: 'solid',
-          fgColor: { argb: bgColor }
+          fgColor: { argb: 'FFE3F2FD' }
         };
+
+        // If exceeds RM50, make the amount text red
+        if (dailyTotal > 50) {
+          const amountCell = subtotalRow.getCell(3); // Amount column
+          amountCell.font = { color: { argb: 'FFFF0000' }, bold: true };
+        }
 
         subtotalRow.eachCell({ includeEmpty: true }, (cell) => {
           cell.border = {
@@ -282,6 +284,7 @@ app.get('/api/export', async (req, res) => {
         date: expense.date,
         day: expense.day,
         amount: parseFloat(expense.amount),
+        claimable: '',
         place: expense.place || 'N/A',
         receipt: expense.receiptPath ? path.basename(expense.receiptPath).replace(/_\d+(\.\w+)$/, '$1') : 'N/A'
       });
@@ -304,22 +307,33 @@ app.get('/api/export', async (req, res) => {
 
     // Add final daily subtotal for the last date group
     if (currentDate) {
+      // Cap daily total at RM50 for claimable amount
+      const claimableDaily = Math.min(dailyTotal, 50);
+      totalClaimable = roundToTwo(totalClaimable + claimableDaily);
+
       const subtotalRow = worksheet.addRow({
         date: currentDate,
         day: 'Daily Total',
         amount: dailyTotal,
+        claimable: claimableDaily,
         place: '',
         receipt: ''
       });
 
       subtotalRow.font = { bold: true };
 
-      const bgColor = dailyTotal > 50 ? 'FFFF6B6B' : 'FFE3F2FD';
+      // Always use blue background for Daily Total
       subtotalRow.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: bgColor }
+        fgColor: { argb: 'FFE3F2FD' }
       };
+
+      // If exceeds RM50, make the amount text red
+      if (dailyTotal > 50) {
+        const amountCell = subtotalRow.getCell(3); // Amount column
+        amountCell.font = { color: { argb: 'FFFF0000' }, bold: true };
+      }
 
       subtotalRow.eachCell({ includeEmpty: true }, (cell) => {
         cell.border = {
@@ -335,7 +349,8 @@ app.get('/api/export', async (req, res) => {
     const totalRow = worksheet.addRow({
       date: 'TOTAL',
       day: '',
-      amount: roundToTwo(expenses.reduce((sum, e) => sum + e.amount, 0)),
+      amount: '',
+      claimable: totalClaimable,
       place: '',
       receipt: ''
     });
@@ -356,6 +371,19 @@ app.get('/api/export', async (req, res) => {
       };
     });
 
+    // Add note explaining the cap
+    worksheet.addRow({});
+    const noteRow = worksheet.addRow({
+      date: '',
+      day: '* Daily claims are capped at RM50.00',
+      amount: '',
+      claimable: '',
+      place: '',
+      receipt: ''
+    });
+    noteRow.font = { italic: true, size: 10 };
+    noteRow.getCell(2).alignment = { horizontal: 'left' };
+
     // Apply number format to all amount cells (column 3)
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber > 1) { // Skip header row
@@ -363,6 +391,18 @@ app.get('/api/export', async (req, res) => {
         amountCell.numFmt = '0.00';
       }
     });
+
+    // Apply Excel best practices
+    // 1. Freeze header row (keep it visible when scrolling)
+    worksheet.views = [
+      { state: 'frozen', xSplit: 0, ySplit: 1 }
+    ];
+
+    // 2. Enable auto-filter on header row
+    worksheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: 6 }
+    };
 
     // Generate Excel buffer
     const excelBuffer = await workbook.xlsx.writeBuffer();

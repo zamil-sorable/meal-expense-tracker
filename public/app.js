@@ -301,10 +301,11 @@ function updateSummary(expenses) {
     progressFill.classList.add('warning');
   }
 
+  const claimableAmount = Math.min(todayTotal, dailyLimit);
   document.getElementById('todayAmount').textContent = `RM ${todayTotal.toFixed(2)}`;
   document.getElementById('remainingText').textContent =
     todayTotal > dailyLimit
-      ? `Exceeded limit by RM ${(todayTotal - dailyLimit).toFixed(2)}`
+      ? `Can only claim RM ${dailyLimit.toFixed(2)} (RM ${(todayTotal - dailyLimit).toFixed(2)} over limit)`
       : `RM ${remaining.toFixed(2)} remaining`;
 
   document.getElementById('weekTotal').textContent = `RM ${weekTotal.toFixed(2)}`;
