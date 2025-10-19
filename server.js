@@ -204,10 +204,10 @@ app.get('/api/export', async (req, res) => {
     worksheet.columns = [
       { header: 'Date', key: 'date', width: 15, style: { numFmt: 'yyyy-mm-dd' } },
       { header: 'Day', key: 'day', width: 18 },
-      { header: 'Amount (RM)', key: 'amount', width: 15, style: { numFmt: '0.00' } },
-      { header: 'Capped Amount (RM)', key: 'claimable', width: 15, style: { numFmt: '0.00' } },
+      { header: 'Amount (RM)', key: 'amount', width: 18, style: { numFmt: '0.00' } },
+      { header: 'Capped Amount (RM)', key: 'claimable', width: 18, style: { numFmt: '0.00' } },
       { header: 'Place', key: 'place', width: 40 },
-      { header: 'Receipt File', key: 'receipt', width: 35 }
+      { header: 'Receipt File', key: 'receipt', width: 28 }
     ];
 
     // Style header row
@@ -370,19 +370,6 @@ app.get('/api/export', async (req, res) => {
         right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
       };
     });
-
-    // Add note explaining the cap
-    worksheet.addRow({});
-    const noteRow = worksheet.addRow({
-      date: '',
-      day: '* Daily claims are capped at RM50.00',
-      amount: '',
-      claimable: '',
-      place: '',
-      receipt: ''
-    });
-    noteRow.font = { italic: true, size: 10 };
-    noteRow.getCell(2).alignment = { horizontal: 'left' };
 
     // Apply number format to all amount cells (column 3)
     worksheet.eachRow((row, rowNumber) => {
