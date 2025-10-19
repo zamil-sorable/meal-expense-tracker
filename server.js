@@ -18,6 +18,7 @@ app.use('/receipts', express.static('receipts'));
 const dataDir = path.join(__dirname, 'data');
 const receiptsDir = path.join(__dirname, 'receipts');
 const dataFile = path.join(dataDir, 'expenses.json');
+const holidaysFile = path.join(dataDir, 'holidays.json');
 
 // Helper function to parse YYYY-MM-DD string as local date (not UTC)
 function parseLocalDate(dateString) {
@@ -69,6 +70,16 @@ function getAllDatesBetween(startDate, endDate) {
   return dates;
 }
 
+// Helper function to check if a date is a public holiday
+function isPublicHoliday(dateString, holidays) {
+  return holidays.some(holiday => holiday.date === dateString);
+}
+
+// Helper function to get holiday by date
+function getHolidayByDate(dateString, holidays) {
+  return holidays.find(holiday => holiday.date === dateString);
+}
+
 // Initialize data file if it doesn't exist
 async function initializeDataFile() {
   try {
@@ -77,6 +88,9 @@ async function initializeDataFile() {
     }
     if (!fsSync.existsSync(dataFile)) {
       await fs.writeFile(dataFile, JSON.stringify({ expenses: [] }, null, 2));
+    }
+    if (!fsSync.existsSync(holidaysFile)) {
+      await fs.writeFile(holidaysFile, JSON.stringify({ holidays: [] }, null, 2));
     }
     if (!fsSync.existsSync(receiptsDir)) {
       await fs.mkdir(receiptsDir, { recursive: true });
@@ -221,11 +235,96 @@ app.delete('/api/expenses/:id', async (req, res) => {
   }
 });
 
+// Get all holidays
+app.get('/api/holidays', async (req, res) => {
+  try {
+    const data = await fs.readFile(holidaysFile, 'utf8');
+    const holidays = JSON.parse(data);
+    res.json(holidays);
+  } catch (error) {
+    console.error('Error reading holidays:', error);
+    res.status(500).json({ error: 'Failed to read holidays' });
+  }
+});
+
+// Add new holiday
+app.post('/api/holidays', async (req, res) => {
+  try {
+    const { date, name } = req.body;
+
+    // Validate date
+    if (!date || date.trim() === '') {
+      return res.status(400).json({ error: 'Date is required' });
+    }
+
+    // Validate name
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'Holiday name is required' });
+    }
+
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+    }
+
+    const data = await fs.readFile(holidaysFile, 'utf8');
+    const holidays = JSON.parse(data);
+
+    // Check if holiday already exists for this date
+    const existingHoliday = holidays.holidays.find(h => h.date === date);
+    if (existingHoliday) {
+      return res.status(400).json({ error: 'A holiday already exists for this date' });
+    }
+
+    const newHoliday = {
+      id: Date.now().toString(),
+      date: date.trim(),
+      name: name.trim(),
+      createdAt: new Date().toISOString()
+    };
+
+    holidays.holidays.push(newHoliday);
+    await fs.writeFile(holidaysFile, JSON.stringify(holidays, null, 2));
+
+    res.json({ success: true, holiday: newHoliday });
+  } catch (error) {
+    console.error('Error adding holiday:', error);
+    res.status(500).json({ error: 'Failed to add holiday' });
+  }
+});
+
+// Delete holiday
+app.delete('/api/holidays/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = await fs.readFile(holidaysFile, 'utf8');
+    const holidays = JSON.parse(data);
+
+    const holidayIndex = holidays.holidays.findIndex(h => h.id === id);
+    if (holidayIndex === -1) {
+      return res.status(404).json({ error: 'Holiday not found' });
+    }
+
+    holidays.holidays.splice(holidayIndex, 1);
+    await fs.writeFile(holidaysFile, JSON.stringify(holidays, null, 2));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting holiday:', error);
+    res.status(500).json({ error: 'Failed to delete holiday' });
+  }
+});
+
 // Export to ZIP with Excel and receipts
 app.get('/api/export', async (req, res) => {
   try {
     const data = await fs.readFile(dataFile, 'utf8');
     const expenses = JSON.parse(data).expenses;
+
+    // Load holidays
+    const holidaysData = await fs.readFile(holidaysFile, 'utf8');
+    const holidays = JSON.parse(holidaysData).holidays;
 
     // Sort expenses by date (oldest first), then by ID (oldest first) for consistent ordering
     expenses.sort((a, b) => {
@@ -314,10 +413,40 @@ app.get('/api/export', async (req, res) => {
           };
         });
 
-        // Check for weekend dates between previous date and current date
+        // Check for weekend dates and public holidays between previous date and current date
         const datesBetween = getAllDatesBetween(currentDate, expense.date);
         datesBetween.forEach(date => {
-          if (isWeekend(date)) {
+          if (isPublicHoliday(date, holidays)) {
+            // Add public holiday row
+            const holiday = getHolidayByDate(date, holidays);
+            const holidayRow = worksheet.addRow({
+              date: date,
+              day: getDayName(date),
+              amount: '',
+              claimable: '',
+              place: `Public Holiday - ${holiday.name}`,
+              receipt: ''
+            });
+
+            // Style holiday row: light red/pink background and italic font
+            holidayRow.font = { italic: true };
+            holidayRow.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFFFE5E5' }
+            };
+
+            // Add borders to holiday row
+            holidayRow.eachCell({ includeEmpty: true }, (cell) => {
+              cell.border = {
+                top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+                left: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+                bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+                right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
+              };
+            });
+          } else if (isWeekend(date)) {
+            // Add weekend row
             const weekendRow = worksheet.addRow({
               date: date,
               day: getDayName(date),
@@ -414,6 +543,84 @@ app.get('/api/export', async (req, res) => {
           bottom: { style: 'medium', color: { argb: 'FF000000' } },
           right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
         };
+      });
+    }
+
+    // Check for remaining weekends/holidays after the last expense (up to today only)
+    if (currentDate) {
+      // Get today's date in YYYY-MM-DD format
+      const now = new Date();
+      const today = now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0');
+
+      // Only show weekends/holidays up to today (not future holidays)
+      const endDate = today;
+
+      // Check for weekends and holidays from last expense date to today
+      const remainingDates = getAllDatesBetween(currentDate, endDate);
+      // Include today itself if it's a weekend or holiday
+      remainingDates.push(endDate);
+
+      remainingDates.forEach(date => {
+        if (isPublicHoliday(date, holidays)) {
+          // Add public holiday row
+          const holiday = getHolidayByDate(date, holidays);
+          const holidayRow = worksheet.addRow({
+            date: date,
+            day: getDayName(date),
+            amount: '',
+            claimable: '',
+            place: `Public Holiday - ${holiday.name}`,
+            receipt: ''
+          });
+
+          // Style holiday row: light red/pink background and italic font
+          holidayRow.font = { italic: true };
+          holidayRow.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFE5E5' }
+          };
+
+          // Add borders to holiday row
+          holidayRow.eachCell({ includeEmpty: true }, (cell) => {
+            cell.border = {
+              top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+              left: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+              bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+              right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
+            };
+          });
+        } else if (isWeekend(date)) {
+          // Add weekend row
+          const weekendRow = worksheet.addRow({
+            date: date,
+            day: getDayName(date),
+            amount: '',
+            claimable: '',
+            place: 'Weekend',
+            receipt: ''
+          });
+
+          // Style weekend row: light yellow/beige background and italic font
+          weekendRow.font = { italic: true };
+          weekendRow.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFF9E6' }
+          };
+
+          // Add borders to weekend row
+          weekendRow.eachCell({ includeEmpty: true }, (cell) => {
+            cell.border = {
+              top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+              left: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+              bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+              right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
+            };
+          });
+        }
       });
     }
 

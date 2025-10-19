@@ -11,6 +11,8 @@ const fileUploadContent = document.getElementById('fileUploadContent');
 const filePreview = document.getElementById('filePreview');
 const previewImage = document.getElementById('previewImage');
 const removeFileBtn = document.getElementById('removeFileBtn');
+const holidayForm = document.getElementById('holidayForm');
+const holidaysBody = document.getElementById('holidaysBody');
 
 // Helper function to get local date string in YYYY-MM-DD format
 function getLocalDateString() {
@@ -163,6 +165,7 @@ removeFileBtn.addEventListener('click', (e) => {
 
 // Initialize
 loadExpenses();
+loadHolidays();
 
 // Form submission
 expenseForm.addEventListener('submit', async (e) => {
@@ -396,3 +399,111 @@ exportBtn.addEventListener('click', async () => {
     showToast('Error', 'Failed to export data', 'error');
   }
 });
+
+// Holiday Management Functions
+
+// Load holidays
+async function loadHolidays() {
+  try {
+    const response = await fetch('/api/holidays');
+    const data = await response.json();
+    const holidays = data.holidays || [];
+    displayHolidays(holidays);
+  } catch (error) {
+    console.error('Error loading holidays:', error);
+    showToast('Error', 'Failed to load holidays', 'error');
+  }
+}
+
+// Display holidays in table
+function displayHolidays(holidays) {
+  if (holidays.length === 0) {
+    holidaysBody.innerHTML = '<tr><td colspan="4" class="no-data">No public holidays added yet</td></tr>';
+    return;
+  }
+
+  // Sort by date (oldest first)
+  holidays.sort((a, b) => a.date.localeCompare(b.date));
+
+  holidaysBody.innerHTML = holidays.map(holiday => `
+    <tr>
+      <td>${holiday.date}</td>
+      <td>${getDayName(holiday.date)}</td>
+      <td>${holiday.name}</td>
+      <td>
+        <button class="btn btn-danger" onclick="deleteHoliday('${holiday.id}')">
+          <i data-lucide="trash-2"></i>
+          <span>Delete</span>
+        </button>
+      </td>
+    </tr>
+  `).join('');
+
+  // Re-initialize icons after updating DOM
+  lucide.createIcons();
+}
+
+// Helper function to get day name (for holiday display)
+function getDayName(dateString) {
+  const date = parseLocalDate(dateString);
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return days[date.getDay()];
+}
+
+// Holiday form submission
+holidayForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const formData = {
+    date: document.getElementById('holidayDate').value,
+    name: document.getElementById('holidayName').value
+  };
+
+  try {
+    const response = await fetch('/api/holidays', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(formData)
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast('Success!', 'Public holiday added successfully', 'success');
+      holidayForm.reset();
+      loadHolidays();
+    } else {
+      showToast('Error', result.error || 'Failed to add holiday', 'error');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    showToast('Error', 'Failed to add holiday', 'error');
+  }
+});
+
+// Delete holiday
+async function deleteHoliday(id) {
+  if (!confirm('Are you sure you want to delete this public holiday?')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/holidays/${id}`, {
+      method: 'DELETE'
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast('Deleted', 'Public holiday deleted successfully', 'success');
+      loadHolidays();
+    } else {
+      showToast('Error', result.error || 'Failed to delete holiday', 'error');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    showToast('Error', 'Failed to delete holiday', 'error');
+  }
+}
