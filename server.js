@@ -30,6 +30,45 @@ function roundToTwo(num) {
   return Math.round(num * 100) / 100;
 }
 
+// Helper function to get the next calendar date
+function getNextDate(dateString) {
+  const date = parseLocalDate(dateString);
+  date.setDate(date.getDate() + 1);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Helper function to check if a date is a weekend (Saturday or Sunday)
+function isWeekend(dateString) {
+  const date = parseLocalDate(dateString);
+  const dayOfWeek = date.getDay();
+  return dayOfWeek === 0 || dayOfWeek === 6; // 0 = Sunday, 6 = Saturday
+}
+
+// Helper function to get day name from date string
+function getDayName(dateString) {
+  const date = parseLocalDate(dateString);
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return days[date.getDay()];
+}
+
+// Helper function to get all dates between two dates (inclusive of start, exclusive of end)
+function getAllDatesBetween(startDate, endDate) {
+  const dates = [];
+  let currentDate = startDate;
+
+  while (currentDate < endDate) {
+    currentDate = getNextDate(currentDate);
+    if (currentDate < endDate) {
+      dates.push(currentDate);
+    }
+  }
+
+  return dates;
+}
+
 // Initialize data file if it doesn't exist
 async function initializeDataFile() {
   try {
@@ -273,6 +312,39 @@ app.get('/api/export', async (req, res) => {
             bottom: { style: 'medium', color: { argb: 'FF000000' } },
             right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
           };
+        });
+
+        // Check for weekend dates between previous date and current date
+        const datesBetween = getAllDatesBetween(currentDate, expense.date);
+        datesBetween.forEach(date => {
+          if (isWeekend(date)) {
+            const weekendRow = worksheet.addRow({
+              date: date,
+              day: getDayName(date),
+              amount: '',
+              claimable: '',
+              place: 'Weekend',
+              receipt: ''
+            });
+
+            // Style weekend row: light yellow/beige background and italic font
+            weekendRow.font = { italic: true };
+            weekendRow.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFFFF9E6' }
+            };
+
+            // Add borders to weekend row
+            weekendRow.eachCell({ includeEmpty: true }, (cell) => {
+              cell.border = {
+                top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+                left: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+                bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
+                right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
+              };
+            });
+          }
         });
 
         // Reset for new day
