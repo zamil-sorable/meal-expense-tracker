@@ -242,7 +242,7 @@ function displayExpenses(expenses) {
       <td>${expense.place || 'N/A'}</td>
       <td>
         ${expense.receiptPath
-          ? `<img src="/${expense.receiptPath}" alt="Receipt" class="receipt-thumbnail" onclick="showReceipt('/${expense.receiptPath}')">`
+          ? `<img src="/${expense.receiptPath}" alt="Receipt" class="receipt-thumbnail" onclick="showReceipt('/${expense.receiptPath}')" onerror="this.onerror=null; this.style.display='none'; this.parentElement.innerHTML='<span style=&quot;color: #e74c3c; font-size: 0.85em;&quot;>Missing</span>';">`
           : 'N/A'}
       </td>
       <td>
