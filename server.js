@@ -338,6 +338,9 @@ app.get('/api/export', async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Meal Expenses');
 
+    // Set default row height to auto-fit content
+    worksheet.properties.defaultRowHeight = 15;
+
     // Add headers
     worksheet.columns = [
       { header: 'Date', key: 'date', width: 15, style: { numFmt: 'yyyy-mm-dd' } },
@@ -357,7 +360,7 @@ app.get('/api/export', async (req, res) => {
       fgColor: { argb: 'FFD3D3D3' }
     };
 
-    // Add borders to header row
+    // Add borders and alignment to header row
     headerRow.eachCell((cell) => {
       cell.border = {
         top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
@@ -365,6 +368,7 @@ app.get('/api/export', async (req, res) => {
         bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
         right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
       };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
     });
 
     // Add data with daily subtotals
@@ -411,6 +415,7 @@ app.get('/api/export', async (req, res) => {
             bottom: { style: 'medium', color: { argb: 'FF000000' } },
             right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
           };
+          cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
         });
 
         // Check for weekend dates and public holidays between previous date and current date
@@ -436,7 +441,7 @@ app.get('/api/export', async (req, res) => {
               fgColor: { argb: 'FFFFE5E5' }
             };
 
-            // Add borders to holiday row
+            // Add borders and alignment to holiday row
             holidayRow.eachCell({ includeEmpty: true }, (cell) => {
               cell.border = {
                 top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
@@ -444,6 +449,7 @@ app.get('/api/export', async (req, res) => {
                 bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
                 right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
               };
+              cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
             });
           } else if (isWeekend(date)) {
             // Add weekend row
@@ -464,7 +470,7 @@ app.get('/api/export', async (req, res) => {
               fgColor: { argb: 'FFFFF9E6' }
             };
 
-            // Add borders to weekend row
+            // Add borders and alignment to weekend row
             weekendRow.eachCell({ includeEmpty: true }, (cell) => {
               cell.border = {
                 top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
@@ -472,6 +478,7 @@ app.get('/api/export', async (req, res) => {
                 bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
                 right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
               };
+              cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
             });
           }
         });
@@ -490,7 +497,7 @@ app.get('/api/export', async (req, res) => {
         receipt: expense.receiptPath ? path.basename(expense.receiptPath).replace(/_\d+(\.\w+)$/, '$1') : 'N/A'
       });
 
-      // Add borders to all cells
+      // Add borders and alignment to all cells
       row.eachCell({ includeEmpty: true }, (cell) => {
         cell.border = {
           top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
@@ -498,6 +505,7 @@ app.get('/api/export', async (req, res) => {
           bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
           right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
         };
+        cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
       });
 
       // Track current date and accumulate daily total
@@ -543,6 +551,7 @@ app.get('/api/export', async (req, res) => {
           bottom: { style: 'medium', color: { argb: 'FF000000' } },
           right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
         };
+        cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
       });
     }
 
@@ -583,7 +592,7 @@ app.get('/api/export', async (req, res) => {
             fgColor: { argb: 'FFFFE5E5' }
           };
 
-          // Add borders to holiday row
+          // Add borders and alignment to holiday row
           holidayRow.eachCell({ includeEmpty: true }, (cell) => {
             cell.border = {
               top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
@@ -591,6 +600,7 @@ app.get('/api/export', async (req, res) => {
               bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
               right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
             };
+            cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
           });
         } else if (isWeekend(date)) {
           // Add weekend row
@@ -611,7 +621,7 @@ app.get('/api/export', async (req, res) => {
             fgColor: { argb: 'FFFFF9E6' }
           };
 
-          // Add borders to weekend row
+          // Add borders and alignment to weekend row
           weekendRow.eachCell({ includeEmpty: true }, (cell) => {
             cell.border = {
               top: { style: 'thin', color: { argb: 'FFD0D0D0' } },
@@ -619,6 +629,7 @@ app.get('/api/export', async (req, res) => {
               bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
               right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
             };
+            cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
           });
         }
       });
@@ -640,7 +651,7 @@ app.get('/api/export', async (req, res) => {
       fgColor: { argb: 'FFFFEB9C' }
     };
 
-    // Add thick top border to TOTAL row for separation
+    // Add thick top border and alignment to TOTAL row for separation
     totalRow.eachCell({ includeEmpty: true }, (cell) => {
       cell.border = {
         top: { style: 'medium', color: { argb: 'FF000000' } },
@@ -648,6 +659,7 @@ app.get('/api/export', async (req, res) => {
         bottom: { style: 'thin', color: { argb: 'FFD0D0D0' } },
         right: { style: 'thin', color: { argb: 'FFD0D0D0' } }
       };
+      cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
     });
 
     // Apply number format to all amount cells (column 3)
@@ -685,6 +697,7 @@ app.get('/api/export', async (req, res) => {
 
     // Add receipts folder with all images
     const receiptsFolder = zip.folder('receipts');
+    let missingReceipts = 0;
     for (const expense of expenses) {
       if (expense.receiptPath) {
         try {
@@ -692,9 +705,13 @@ app.get('/api/export', async (req, res) => {
           const receiptData = await fs.readFile(receiptFullPath);
           receiptsFolder.file(path.basename(expense.receiptPath), receiptData);
         } catch (err) {
-          console.error(`Error reading receipt ${expense.receiptPath}:`, err);
+          missingReceipts++;
+          console.warn(`Warning: Skipping missing receipt ${expense.receiptPath} (will continue export without it)`);
         }
       }
+    }
+    if (missingReceipts > 0) {
+      console.log(`Export completed with ${missingReceipts} missing receipt(s)`);
     }
 
     // Generate ZIP buffer
